@@ -108,6 +108,19 @@ footer .fine{margin-top:10px;font-size:11px;opacity:0.7}
 .file-name{font-size:12px;color:var(--muted);margin-top:8px;word-break:break-all}
 .note{font-size:12px;color:var(--muted);margin-top:14px;text-align:center}
 
+/* v4 additions */
+#scrollProgress{position:fixed;top:0;left:0;height:3px;background:linear-gradient(90deg,var(--blue),var(--purple),var(--pink));z-index:20;width:0%;transition:width .1s linear}
+.theme-btn{border:1px solid var(--border);background:var(--glass);color:var(--text);padding:6px 12px;border-radius:999px;font-size:12px;cursor:pointer}
+.status-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-top:18px}
+.status-chip{border:1px solid var(--border);border-radius:12px;padding:14px;background:var(--glass);display:flex;align-items:center;gap:10px}
+.status-dot{width:9px;height:9px;border-radius:50%;background:var(--teal);box-shadow:0 0 8px var(--teal);flex-shrink:0}
+.status-dot.off{background:#666;box-shadow:none}
+.status-chip .txt{font-size:13px}
+.status-chip .txt small{display:block;color:var(--muted);font-size:11px}
+.live-meta{font-size:12px;color:var(--muted);margin-top:14px;text-align:center}
+
+:root[data-theme="light"]{--bg:#f5f6fa;--card:#fff;--border:#e2e5ec;--text:#1c2130;--muted:#5b6274;--glass:rgba(255,255,255,0.7)}
+
 @media (prefers-color-scheme: light){
   :root{--bg:#f5f6fa;--card:#fff;--border:#e2e5ec;--text:#1c2130;--muted:#5b6274;--glass:rgba(255,255,255,0.7)}
 }
@@ -115,12 +128,14 @@ footer .fine{margin-top:10px;font-size:11px;opacity:0.7}
 </head>
 <body>
 
+<div id="scrollProgress"></div>
 <div class="bg-grid"></div>
 <div class="orb orb1"></div>
 <div class="orb orb2"></div>
 <div class="orb orb3"></div>
 
 <nav>
+  <a href="#live-status">Status</a>
   <a href="#layers">Architecture</a>
   <a href="#pipeline">Pipeline</a>
   <a href="#studio">Sketch Studio</a>
@@ -128,6 +143,7 @@ footer .fine{margin-top:10px;font-size:11px;opacity:0.7}
   <a href="#stack">Stack</a>
   <a href="#roadmap">Roadmap</a>
   <a href="#credit">Credits</a>
+  <button class="theme-btn" id="themeBtn">🌙 Theme</button>
 </nav>
 
 <header>
@@ -153,6 +169,18 @@ footer .fine{margin-top:10px;font-size:11px;opacity:0.7}
     <div class="stat"><b>20+</b><span>Compliance checks</span></div>
   </div>
 </header>
+
+<section id="live-status">
+  <div class="section-title">Live</div>
+  <h2 class="big">System status</h2>
+  <div class="layer" style="--glow:rgba(61,220,151,0.4)">
+    <p style="margin-top:0">Pulled live from a real Vercel serverless function (<code>/api/status</code>) — not hardcoded. Refresh the page and the timestamp/latency change.</p>
+    <div class="status-grid" id="statusGrid">
+      <div class="status-chip"><span class="status-dot off"></span><span class="txt">Connecting…<small>Loading layers</small></span></div>
+    </div>
+    <div class="live-meta" id="liveMeta">Fetching /api/status…</div>
+  </div>
+</section>
 
 <section id="layers">
   <div class="section-title">System design</div>
@@ -527,6 +555,52 @@ footer .fine{margin-top:10px;font-size:11px;opacity:0.7}
     link.download = 'sketch-studio-output.png';
     link.href = stylCanvas.toDataURL('image/png');
     link.click();
+  });
+})();
+
+// v4: scroll progress bar
+(function(){
+  var bar = document.getElementById('scrollProgress');
+  window.addEventListener('scroll', function(){
+    var h = document.documentElement;
+    var scrolled = (h.scrollTop) / (h.scrollHeight - h.clientHeight) * 100;
+    bar.style.width = scrolled + '%';
+  });
+})();
+
+// v4: theme toggle (persisted)
+(function(){
+  var btn = document.getElementById('themeBtn');
+  var saved = localStorage.getItem('theme');
+  if (saved) document.documentElement.setAttribute('data-theme', saved);
+  btn.addEventListener('click', function(){
+    var current = document.documentElement.getAttribute('data-theme');
+    var next = current === 'light' ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', next);
+    try { localStorage.setItem('theme', next); } catch(e){}
+    btn.textContent = next === 'light' ? '☀️ Theme' : '🌙 Theme';
+  });
+})();
+
+// v4: live status from Vercel serverless function
+(function(){
+  var grid = document.getElementById('statusGrid');
+  var meta = document.getElementById('liveMeta');
+  fetch('/api/status').then(function(r){
+    if (!r.ok) throw new Error('bad response');
+    return r.json();
+  }).then(function(data){
+    grid.innerHTML = '';
+    data.layers.forEach(function(l){
+      var chip = document.createElement('div');
+      chip.className = 'status-chip';
+      chip.innerHTML = '<span class="status-dot"></span><span class="txt">' + l.name + '<small>' + l.status + '</small></span>';
+      grid.appendChild(chip);
+    });
+    meta.textContent = 'Server time: ' + data.server_time + ' · Edge latency: ' + data.edge_latency_ms + 'ms · v' + data.version;
+  }).catch(function(){
+    meta.textContent = 'Live status needs the /api/status function — available once deployed on Vercel (not on static-only hosts like GitHub Pages).';
+    grid.innerHTML = '<div class="status-chip"><span class="status-dot off"></span><span class="txt">API not reachable here<small>Deploy to Vercel to enable</small></span></div>';
   });
 })();
 </script>
