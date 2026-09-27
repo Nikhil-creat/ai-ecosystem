@@ -91,6 +91,23 @@ svg{width:100%;height:auto;overflow:visible}
 footer{position:relative;z-index:1;text-align:center;color:var(--muted);font-size:13px;padding:48px 20px 60px;border-top:1px solid var(--border);margin-top:20px}
 footer .fine{margin-top:10px;font-size:11px;opacity:0.7}
 
+.upload-box{border:2px dashed var(--border);border-radius:16px;padding:32px;text-align:center;background:var(--glass);cursor:pointer;transition:border-color .2s}
+.upload-box:hover,.upload-box.drag{border-color:var(--blue)}
+.upload-box input{display:none}
+.upload-icon{font-size:32px;margin-bottom:10px}
+.studio-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:20px}
+@media (max-width:640px){.studio-grid{grid-template-columns:1fr}}
+.preview-box{border:1px solid var(--border);border-radius:14px;padding:14px;background:var(--glass);min-height:220px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px}
+.preview-box canvas,.preview-box img{max-width:100%;border-radius:8px}
+.preview-box h4{margin:0;font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;align-self:flex-start}
+.controls{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:16px}
+.btn{border:1px solid var(--border);background:var(--glass);color:var(--text);padding:9px 18px;border-radius:999px;font-size:13px;cursor:pointer;transition:border-color .2s,transform .2s}
+.btn:hover{border-color:var(--blue);transform:translateY(-2px)}
+.btn:disabled{opacity:0.4;cursor:not-allowed;transform:none}
+.btn.primary{background:linear-gradient(90deg,var(--blue),var(--purple));border:none;color:#05070d;font-weight:600}
+.file-name{font-size:12px;color:var(--muted);margin-top:8px;word-break:break-all}
+.note{font-size:12px;color:var(--muted);margin-top:14px;text-align:center}
+
 @media (prefers-color-scheme: light){
   :root{--bg:#f5f6fa;--card:#fff;--border:#e2e5ec;--text:#1c2130;--muted:#5b6274;--glass:rgba(255,255,255,0.7)}
 }
@@ -106,6 +123,7 @@ footer .fine{margin-top:10px;font-size:11px;opacity:0.7}
 <nav>
   <a href="#layers">Architecture</a>
   <a href="#pipeline">Pipeline</a>
+  <a href="#studio">Sketch Studio</a>
   <a href="#compliance">Compliance</a>
   <a href="#stack">Stack</a>
   <a href="#roadmap">Roadmap</a>
@@ -234,6 +252,43 @@ footer .fine{margin-top:10px;font-size:11px;opacity:0.7}
   </div>
 </section>
 
+<section id="studio">
+  <div class="section-title">Try it</div>
+  <h2 class="big">Sketch Studio</h2>
+  <div class="layer" style="--glow:rgba(79,195,255,0.4)">
+    <p style="margin-top:0">Upload a rough sketch, screenshot, or logo draft (PNG / JPG / PDF*). It's processed entirely in your browser — nothing is uploaded to a server — and turned into a cleaned-up, colour-graded preview you can download.</p>
+
+    <label class="upload-box" id="dropZone" for="fileInput">
+      <div class="upload-icon">📤</div>
+      <div><b>Tap to choose a file</b> or drag it here</div>
+      <div class="file-name" id="fileName">No file selected</div>
+      <input type="file" id="fileInput" accept="image/png, image/jpeg, application/pdf">
+    </label>
+
+    <div class="studio-grid">
+      <div class="preview-box">
+        <h4>Original</h4>
+        <canvas id="origCanvas"></canvas>
+        <div id="origPlaceholder" style="color:var(--muted);font-size:13px">Preview appears here</div>
+      </div>
+      <div class="preview-box">
+        <h4>Stylised output</h4>
+        <canvas id="stylCanvas"></canvas>
+        <div id="stylPlaceholder" style="color:var(--muted);font-size:13px">Result appears here</div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button class="btn" id="btnBoost" disabled>Colour boost</button>
+      <button class="btn" id="btnEdge" disabled>Line-art / edges</button>
+      <button class="btn" id="btnDuo" disabled>Duotone (brand colours)</button>
+      <button class="btn primary" id="btnDownload" disabled>Download result</button>
+    </div>
+    <div class="note" id="pdfNote" style="display:none">PDF selected — page 1 will be rendered as the "original" preview once your browser finishes loading it. PDFs are shown as a file reference here; for pixel processing, export the sketch as PNG/JPG first.</div>
+    <p class="note">*This runs real image filters (colour boost, edge/line-art detection, duotone) live on-device with plain JavaScript + Canvas — it is not a generative AI model, so it enhances your actual sketch rather than inventing new artwork.</p>
+  </div>
+</section>
+
 <section id="pipeline">
   <div class="section-title">Delivery</div>
   <h2 class="big">CI/CD pipeline</h2>
@@ -339,6 +394,142 @@ footer .fine{margin-top:10px;font-size:11px;opacity:0.7}
   <div>Multi-modal AI ecosystem — architecture overview, v2</div>
   <div class="fine">Designed &amp; developed end-to-end by Nikhil Chary Sriramoju. Not legal advice; have counsel review compliance items before launch.</div>
 </footer>
+
+<script>
+(function(){
+  var fileInput = document.getElementById('fileInput');
+  var dropZone = document.getElementById('dropZone');
+  var fileName = document.getElementById('fileName');
+  var origCanvas = document.getElementById('origCanvas');
+  var stylCanvas = document.getElementById('stylCanvas');
+  var origPh = document.getElementById('origPlaceholder');
+  var stylPh = document.getElementById('stylPlaceholder');
+  var pdfNote = document.getElementById('pdfNote');
+  var btnBoost = document.getElementById('btnBoost');
+  var btnEdge = document.getElementById('btnEdge');
+  var btnDuo = document.getElementById('btnDuo');
+  var btnDownload = document.getElementById('btnDownload');
+  var originalImageData = null;
+
+  function enableButtons(on){
+    [btnBoost, btnEdge, btnDuo, btnDownload].forEach(function(b){ b.disabled = !on; });
+  }
+
+  function loadImageToCanvas(img){
+    var maxW = 360;
+    var scale = Math.min(1, maxW / img.width);
+    var w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+    [origCanvas, stylCanvas].forEach(function(c){ c.width = w; c.height = h; });
+    var octx = origCanvas.getContext('2d');
+    octx.drawImage(img, 0, 0, w, h);
+    var sctx = stylCanvas.getContext('2d');
+    sctx.drawImage(img, 0, 0, w, h);
+    originalImageData = octx.getImageData(0, 0, w, h);
+    origPh.style.display = 'none';
+    stylPh.style.display = 'none';
+    enableButtons(true);
+  }
+
+  function handleFile(file){
+    if (!file) return;
+    fileName.textContent = file.name;
+    if (file.type === 'application/pdf') {
+      pdfNote.style.display = 'block';
+      origPh.textContent = 'PDF file: ' + file.name;
+      enableButtons(false);
+      return;
+    }
+    pdfNote.style.display = 'none';
+    var reader = new FileReader();
+    reader.onload = function(e){
+      var img = new Image();
+      img.onload = function(){ loadImageToCanvas(img); };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  fileInput.addEventListener('change', function(e){ handleFile(e.target.files[0]); });
+  ['dragover','dragenter'].forEach(function(ev){
+    dropZone.addEventListener(ev, function(e){ e.preventDefault(); dropZone.classList.add('drag'); });
+  });
+  ['dragleave','drop'].forEach(function(ev){
+    dropZone.addEventListener(ev, function(e){ e.preventDefault(); dropZone.classList.remove('drag'); });
+  });
+  dropZone.addEventListener('drop', function(e){
+    e.preventDefault();
+    if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+  });
+
+  function resetToOriginal(){
+    if (!originalImageData) return;
+    stylCanvas.getContext('2d').putImageData(originalImageData, 0, 0);
+  }
+
+  btnBoost.addEventListener('click', function(){
+    if (!originalImageData) return;
+    var sctx = stylCanvas.getContext('2d');
+    var d = sctx.createImageData(originalImageData.width, originalImageData.height);
+    var src = originalImageData.data, out = d.data;
+    for (var i = 0; i < src.length; i += 4) {
+      out[i]   = Math.min(255, src[i]   * 1.25 + 8);
+      out[i+1] = Math.min(255, src[i+1] * 1.15 + 4);
+      out[i+2] = Math.min(255, src[i+2] * 1.35 + 10);
+      out[i+3] = src[i+3];
+    }
+    sctx.putImageData(d, 0, 0);
+  });
+
+  btnEdge.addEventListener('click', function(){
+    if (!originalImageData) return;
+    var w = originalImageData.width, h = originalImageData.height;
+    var src = originalImageData.data;
+    var gray = new Float32Array(w*h);
+    for (var p = 0; p < w*h; p++){
+      var i = p*4;
+      gray[p] = 0.299*src[i] + 0.587*src[i+1] + 0.114*src[i+2];
+    }
+    var sctx = stylCanvas.getContext('2d');
+    var d = sctx.createImageData(w, h);
+    var out = d.data;
+    for (var y = 1; y < h-1; y++){
+      for (var x = 1; x < w-1; x++){
+        var idx = y*w+x;
+        var gx = gray[idx-1] - gray[idx+1];
+        var gy = gray[idx-w] - gray[idx+w];
+        var mag = Math.min(255, Math.sqrt(gx*gx+gy*gy)*2);
+        var o = idx*4;
+        var v = 255 - mag;
+        out[o]=v; out[o+1]= mag>40 ? 200:v; out[o+2]=255; out[o+3]=255;
+      }
+    }
+    sctx.putImageData(d, 0, 0);
+  });
+
+  btnDuo.addEventListener('click', function(){
+    if (!originalImageData) return;
+    var sctx = stylCanvas.getContext('2d');
+    var d = sctx.createImageData(originalImageData.width, originalImageData.height);
+    var src = originalImageData.data, out = d.data;
+    var dark = [15,20,35], light = [79,195,255];
+    for (var i = 0; i < src.length; i += 4) {
+      var lum = (0.299*src[i]+0.587*src[i+1]+0.114*src[i+2]) / 255;
+      out[i]   = dark[0] + (light[0]-dark[0])*lum;
+      out[i+1] = dark[1] + (light[1]-dark[1])*lum;
+      out[i+2] = dark[2] + (light[2]-dark[2])*lum;
+      out[i+3] = src[i+3];
+    }
+    sctx.putImageData(d, 0, 0);
+  });
+
+  btnDownload.addEventListener('click', function(){
+    var link = document.createElement('a');
+    link.download = 'sketch-studio-output.png';
+    link.href = stylCanvas.toDataURL('image/png');
+    link.click();
+  });
+})();
+</script>
 
 </body>
 </html>
